@@ -1223,35 +1223,18 @@ class LogAggregator
      */
     public function queryConversionsByPageView(string $linkField, int $idGoal)
     {
+        $conversionsSelect = "log_conversion.*, lac.idaction";
 
-        $select = "
-            log_conversion.idvisit AS idvisit,
-            " . $idGoal . " AS idgoal,
-            " . ($linkField == 'idaction_url' ? Action::TYPE_PAGE_URL : Action::TYPE_PAGE_TITLE) . " AS `type`,
-            lac.idaction AS idaction, 
-            COUNT(*) AS `1`,            
-            " . sprintf("ROUND(SUM(log_conversion.revenue),2) AS `%d`,", Metrics::INDEX_GOAL_REVENUE) . "
-            " . sprintf("COUNT(log_conversion.idvisit) AS `%d`,", Metrics::INDEX_GOAL_NB_VISITS_CONVERTED) . "
-            " . sprintf("ROUND(SUM(1 / log_conversion.pageviews_before * log_conversion.revenue_subtotal),2) AS `%d`,", Metrics::INDEX_GOAL_ECOMMERCE_REVENUE_SUBTOTAL) . "
-            " . sprintf("ROUND(SUM(1 / log_conversion.pageviews_before * log_conversion.revenue_tax),2) AS `%d`,", Metrics::INDEX_GOAL_ECOMMERCE_REVENUE_TAX) . "
-            " . sprintf("ROUND(SUM(1 / log_conversion.pageviews_before * log_conversion.revenue_shipping),2) AS `%d`,", Metrics::INDEX_GOAL_ECOMMERCE_REVENUE_SHIPPING) . "
-            " . sprintf("ROUND(SUM(1 / log_conversion.pageviews_before * log_conversion.revenue_discount),2) AS `%d`,", Metrics::INDEX_GOAL_ECOMMERCE_REVENUE_DISCOUNT) . "
-            " . sprintf("SUM(1 / log_conversion.pageviews_before * log_conversion.items) AS `%d`,", Metrics::INDEX_GOAL_ECOMMERCE_ITEMS) . "
-            " . sprintf("log_conversion.pageviews_before AS `%d`,", Metrics::INDEX_GOAL_NB_PAGES_UNIQ_BEFORE) . "
-            " . sprintf("SUM(1 / log_conversion.pageviews_before) AS `%d`,", Metrics::INDEX_GOAL_NB_CONVERSIONS_ATTRIB) . "
-            " . sprintf("COUNT(*) AS `%d`,", Metrics::INDEX_GOAL_NB_CONVERSIONS_PAGE_UNIQ) . "
-            " . sprintf("ROUND(SUM(1 / log_conversion.pageviews_before * log_conversion.revenue),2) AS `%d`", Metrics::INDEX_GOAL_REVENUE_ATTRIB);
-
-        $from = [
+        $conversionsFrom = [
             'log_conversion',
-                ['table' => 'log_link_visit_action', 'tableAlias' => 'logva', 'join' => 'RIGHT JOIN',
-                            'joinOn' => 'log_conversion.idvisit = logva.idvisit'],
-                ['table' => 'log_action', 'tableAlias' => 'lac',
-                            'joinOn' => 'logva.' . $linkField . ' = lac.idaction']
+            ['table' => 'log_link_visit_action', 'tableAlias' => 'logva', 'join' => 'RIGHT JOIN',
+                'joinOn' => 'log_conversion.idvisit = logva.idvisit'],
+            ['table' => 'log_action', 'tableAlias' => 'lac',
+                'joinOn' => 'logva.' . $linkField . ' = lac.idaction']
         ];
 
-        $where = $this->getWhereStatement('log_conversion', 'server_time');
-        $where .= sprintf(
+        $conversionsWhere = $this->getWhereStatement('log_conversion', 'server_time');
+        $conversionsWhere .= sprintf(
             'AND log_conversion.idgoal = %d
                           AND logva.server_time <= log_conversion.server_time
                           AND lac.type = %s',
@@ -1259,10 +1242,30 @@ class LogAggregator
             ($linkField == 'idaction_url' ? Action::TYPE_PAGE_URL : Action::TYPE_PAGE_TITLE)
         );
 
-        $groupBy = 'log_conversion.idvisit, lac.idaction';
+        $conversionsGroupBy = 'log_conversion.idvisit, lac.idaction';
 
-        $query = $this->generateQuery($select, $from, $where, $groupBy, false);
-        return $this->getDb()->query($query['sql'], $query['bind']);
+        $conversionsQuery = $this->generateQuery($conversionsSelect, $conversionsFrom, $conversionsWhere, $conversionsGroupBy, false);
+
+        $select = "
+            lc.idvisit AS idvisit,
+            " . $idGoal . " AS idgoal,
+            " . ($linkField == 'idaction_url' ? Action::TYPE_PAGE_URL : Action::TYPE_PAGE_TITLE) . " AS `type`,
+            lc.idaction AS idaction, 
+            COUNT(*) AS `1`,            
+            " . sprintf("ROUND(SUM(lc.revenue),2) AS `%d`,", Metrics::INDEX_GOAL_REVENUE) . "
+            " . sprintf("COUNT(lc.idvisit) AS `%d`,", Metrics::INDEX_GOAL_NB_VISITS_CONVERTED) . "
+            " . sprintf("ROUND(SUM(1 / lc.pageviews_before * lc.revenue_subtotal),2) AS `%d`,", Metrics::INDEX_GOAL_ECOMMERCE_REVENUE_SUBTOTAL) . "
+            " . sprintf("ROUND(SUM(1 / lc.pageviews_before * lc.revenue_tax),2) AS `%d`,", Metrics::INDEX_GOAL_ECOMMERCE_REVENUE_TAX) . "
+            " . sprintf("ROUND(SUM(1 / lc.pageviews_before * lc.revenue_shipping),2) AS `%d`,", Metrics::INDEX_GOAL_ECOMMERCE_REVENUE_SHIPPING) . "
+            " . sprintf("ROUND(SUM(1 / lc.pageviews_before * lc.revenue_discount),2) AS `%d`,", Metrics::INDEX_GOAL_ECOMMERCE_REVENUE_DISCOUNT) . "
+            " . sprintf("SUM(1 / lc.pageviews_before * lc.items) AS `%d`,", Metrics::INDEX_GOAL_ECOMMERCE_ITEMS) . "
+            " . sprintf("lc.pageviews_before AS `%d`,", Metrics::INDEX_GOAL_NB_PAGES_UNIQ_BEFORE) . "
+            " . sprintf("SUM(1 / lc.pageviews_before) AS `%d`,", Metrics::INDEX_GOAL_NB_CONVERSIONS_ATTRIB) . "
+            " . sprintf("COUNT(*) AS `%d`,", Metrics::INDEX_GOAL_NB_CONVERSIONS_PAGE_UNIQ) . "
+            " . sprintf("ROUND(SUM(1 / lc.pageviews_before * lc.revenue),2) AS `%d`", Metrics::INDEX_GOAL_REVENUE_ATTRIB);
+
+        $sql = sprintf("SELECT %s FROM (%s) as lc", $select, $conversionsQuery['sql']);
+        return $this->getDb()->query($sql, $conversionsQuery['bind']);
     }
 
     /**
