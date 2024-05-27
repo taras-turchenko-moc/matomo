@@ -1264,7 +1264,7 @@ class LogAggregator
             " . sprintf("COUNT(*) AS `%d`,", Metrics::INDEX_GOAL_NB_CONVERSIONS_PAGE_UNIQ) . "
             " . sprintf("ROUND(SUM(1 / lc.pageviews_before * lc.revenue),2) AS `%d`", Metrics::INDEX_GOAL_REVENUE_ATTRIB);
 
-        $sql = sprintf("SELECT %s FROM (%s) as lc", $select, $conversionsQuery['sql']);
+        $sql = sprintf("SELECT %s FROM (%s) as lc GROUP BY lc.idvisit, lc.idaction", $select, $conversionsQuery['sql']);
         return $this->getDb()->query($sql, $conversionsQuery['bind']);
     }
 
